@@ -70,16 +70,16 @@ export const PromptOptimizer: React.FC = () => {
         <p className="text-gray-400">Refine your AI prompts for better results using our galaxy-class optimization engine.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 pb-20 md:pb-0">
         {/* Input Section */}
-        <div className="space-y-4 bg-galaxy-800/50 p-6 rounded-2xl border border-galaxy-700 backdrop-blur-sm">
+        <div className="space-y-4 bg-galaxy-800/50 p-4 md:p-6 rounded-2xl border border-galaxy-700 backdrop-blur-sm">
           <div className="flex justify-between items-center">
-            <h3 className="text-xl font-semibold text-white">Original Prompt</h3>
+            <h3 className="text-lg md:text-xl font-semibold text-white">Original Prompt</h3>
             <div className="flex gap-2">
               <select 
                 value={focus} 
                 onChange={(e) => setFocus(e.target.value)}
-                className="bg-galaxy-900 border border-galaxy-700 rounded-lg px-3 py-1 text-sm text-gray-300 focus:outline-none focus:border-primary"
+                className="bg-galaxy-900 border border-galaxy-700 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-primary min-h-[40px]"
               >
                 <option value="clarity">Clarity</option>
                 <option value="creativity">Creativity</option>
@@ -93,11 +93,11 @@ export const PromptOptimizer: React.FC = () => {
             value={inputPrompt}
             onChange={(e) => setInputPrompt(e.target.value)}
             placeholder="Enter your prompt here..."
-            className="w-full h-64 bg-galaxy-900/50 border border-galaxy-700 rounded-xl p-4 text-white placeholder-galaxy-500 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+            className="w-full h-48 md:h-64 bg-galaxy-900/50 border border-galaxy-700 rounded-xl p-4 text-white placeholder-galaxy-500 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none text-base"
           />
 
-          <div className="flex items-center justify-between pt-2">
-            <div className="flex items-center gap-4 text-sm text-gray-400">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between pt-2 gap-4">
+            <div className="flex items-center gap-4 text-sm text-gray-400 w-full md:w-auto">
               <Sliders size={16} />
               <span>Intensity: {intensity}%</span>
               <input 
@@ -106,13 +106,15 @@ export const PromptOptimizer: React.FC = () => {
                 max="100" 
                 value={intensity} 
                 onChange={(e) => setIntensity(Number(e.target.value))}
-                className="w-24 accent-primary"
+                className="w-full md:w-24 accent-primary h-10 md:h-auto"
               />
             </div>
+            
+            {/* Desktop Button */}
             <button
               onClick={handleOptimize}
               disabled={loading || !inputPrompt.trim()}
-              className="px-6 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="hidden md:flex px-6 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? <RefreshCw className="animate-spin" size={18} /> : <Sparkles size={18} />}
               Optimize
@@ -121,32 +123,32 @@ export const PromptOptimizer: React.FC = () => {
         </div>
 
         {/* Output Section */}
-        <div className="space-y-4 bg-galaxy-800/50 p-6 rounded-2xl border border-galaxy-700 backdrop-blur-sm relative overflow-hidden">
+        <div className="space-y-4 bg-galaxy-800/50 p-4 md:p-6 rounded-2xl border border-galaxy-700 backdrop-blur-sm relative overflow-hidden">
           <div className="flex justify-between items-center">
-            <h3 className="text-xl font-semibold text-white">Optimized Result</h3>
+            <h3 className="text-lg md:text-xl font-semibold text-white">Optimized Result</h3>
             {result && (
               <div className="flex gap-2">
                  <button 
                   onClick={() => {/* Save logic */}}
-                  className="p-2 hover:bg-galaxy-700 rounded-lg text-gray-400 hover:text-white transition-colors"
+                  className="p-3 hover:bg-galaxy-700 rounded-lg text-gray-400 hover:text-white transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
                   title="Save to favorites"
                   aria-label="Save to favorites"
                 >
-                  <Save size={18} />
+                  <Save size={20} />
                 </button>
                 <button 
                   onClick={copyToClipboard}
-                  className="p-2 hover:bg-galaxy-700 rounded-lg text-gray-400 hover:text-white transition-colors"
+                  className="p-3 hover:bg-galaxy-700 rounded-lg text-gray-400 hover:text-white transition-colors min-h-[48px] min-w-[48px] flex items-center justify-center"
                   title="Copy to clipboard"
                   aria-label="Copy to clipboard"
                 >
-                  {copied ? <Check size={18} className="text-green-400" /> : <Copy size={18} />}
+                  {copied ? <Check size={20} className="text-green-400" /> : <Copy size={20} />}
                 </button>
               </div>
             )}
           </div>
 
-          <div className="w-full h-64 bg-galaxy-900/50 border border-galaxy-700 rounded-xl p-4 overflow-y-auto relative">
+          <div className="w-full h-64 bg-galaxy-900/50 border border-galaxy-700 rounded-xl p-4 overflow-y-auto relative text-base">
             {!result ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2">
                 <Sparkles size={32} className="opacity-20" />
@@ -182,6 +184,18 @@ export const PromptOptimizer: React.FC = () => {
             </motion.div>
           )}
         </div>
+      </div>
+
+      {/* Floating Action Button for Mobile */}
+      <div className="fixed bottom-4 right-4 z-50 md:hidden">
+        <button
+          onClick={handleOptimize}
+          disabled={loading || !inputPrompt.trim()}
+          className="w-14 h-14 bg-primary hover:bg-primary-hover text-white rounded-full flex items-center justify-center shadow-lg shadow-primary/30 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label="Optimize Prompt"
+        >
+          {loading ? <RefreshCw className="animate-spin" size={24} /> : <Sparkles size={24} />}
+        </button>
       </div>
     </div>
   );

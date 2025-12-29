@@ -55,7 +55,21 @@ app.post('/api/optimize-prompt', async (req, res) => {
     
     // Parse JSON from the response (handling potential markdown code blocks)
     const jsonStr = text.replace(/```json\n?|\n?```/g, '').trim();
-    const data = JSON.parse(jsonStr);
+    let data;
+    try {
+      data = JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.error('JSON Parse Error:', parseError);
+      throw new Error('Invalid JSON received from AI model');
+    }
+    
+    // Validate structure
+    if (!data.optimized) {
+      data.optimized = "Optimization failed to produce valid output.";
+    }
+    if (!Array.isArray(data.changes)) {
+      data.changes = ["General improvement"];
+    }
     
     res.json({ 
       original: prompt,
