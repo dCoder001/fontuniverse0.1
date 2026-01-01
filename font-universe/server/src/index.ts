@@ -14,8 +14,78 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 app.use(cors());
 app.use(express.json());
 
+// Metrics and health tracking
+const metrics = {
+  optimizer: {
+    total: 0,
+    aiSuccess: 0,
+    fallback: 0,
+    errors: 0,
+    durationsMs: [] as number[],
+    lastError: null as null | string,
+    lastAISuccessAt: null as null | number,
+  }
+};
+
+function sanitizePrompt(input: unknown): string {
+  const str = String(input ?? '').trim();
+  const maxLen = 4000;
+  // remove non-printable except common whitespace
+  const cleaned = str.replace(/[^\x09\x0A\x0D\x20-\x7E]/g, '');
+  return cleaned.slice(0, maxLen);
+}
+
+function normalizeFocus(focus: unknown): 'clarity' | 'creativity' | 'technicality' | 'brevity' {
+  const allowed = ['clarity', 'creativity', 'technicality', 'brevity'] as const;
+  const f = String(focus || 'clarity').toLowerCase();
+  return (allowed as readonly string[]).includes(f) ? (f as any) : 'clarity';
+}
+
+function normalizeIntensity(intensity: unknown): number {
+  const n = Number(intensity);
+  if (Number.isFinite(n)) return Math.max(0, Math.min(100, Math.round(n)));
+  return 50;
+}
+
 app.get('/', (req, res) => {
   res.send('Font Universe API is running');
+});
+
+// Health endpoint with simple AI availability check
+app.get('/health', async (req, res) => {
+  let aiStatus = 'unknown';
+  const start = Date.now();
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await Promise.race([
+      model.generateContent('ping'),
+      new Promise((_r, rej) => setTimeout(() => rej(new Error('timeout')), 2500))
+    ]);
+    if (result) aiStatus = 'ok';
+  } catch {
+    aiStatus = 'degraded';
+  }
+  res.json({
+    uptime: process.uptime(),
+    aiStatus,
+    optimizer: {
+      total: metrics.optimizer.total,
+      aiSuccess: metrics.optimizer.aiSuccess,
+      fallback: metrics.optimizer.fallback,
+      errors: metrics.optimizer.errors,
+      avgLatencyMs: metrics.optimizer.durationsMs.length
+        ? Math.round(metrics.optimizer.durationsMs.reduce((a, b) => a + b, 0) / metrics.optimizer.durationsMs.length)
+        : 0,
+      lastAISuccessAt: metrics.optimizer.lastAISuccessAt,
+      lastError: metrics.optimizer.lastError
+    },
+    latencyCheckMs: Date.now() - start
+  });
+});
+
+// Metrics endpoint
+app.get('/metrics', (req, res) => {
+  res.json(metrics);
 });
 
 // AI Text Generation Endpoint
@@ -36,7 +106,12 @@ app.post('/api/generate-text', async (req, res) => {
 
 // Prompt Optimizer Endpoint
 app.post('/api/optimize-prompt', async (req, res) => {
-  const { prompt, focus, intensity } = req.body;
+  const rawPrompt = req.body?.prompt;
+  const rawFocus = req.body?.focus;
+  const rawIntensity = req.body?.intensity;
+  const prompt = sanitizePrompt(rawPrompt);
+  const focus = normalizeFocus(rawFocus);
+  const intensity = normalizeIntensity(rawIntensity);
   
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
@@ -52,6 +127,8 @@ Original Prompt: "${prompt}"`;
         p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
       });
 
+    const t0 = Date.now();
+    metrics.optimizer.total++;
     const result = await withTimeout(model.generateContent(systemPrompt));
     const response = await result.response;
     const text = response.text();
@@ -64,6 +141,8 @@ Original Prompt: "${prompt}"`;
     } catch (parseError) {
       console.error('JSON Parse Error:', parseError);
       // Fall back to deterministic optimization if JSON parsing fails
+      metrics.optimizer.fallback++;
+      metrics.optimizer.durationsMs.push(Date.now() - t0);
       const fallback = deterministicOptimize(prompt, focus, intensity);
       return res.json(fallback);
     }
@@ -76,6 +155,9 @@ Original Prompt: "${prompt}"`;
       data.changes = deterministicOptimize(prompt, focus, intensity).changes;
     }
     
+    metrics.optimizer.aiSuccess++;
+    metrics.optimizer.lastAISuccessAt = Date.now();
+    metrics.optimizer.durationsMs.push(Date.now() - t0);
     res.json({ 
       original: prompt,
       optimized: data.optimized,
@@ -84,6 +166,9 @@ Original Prompt: "${prompt}"`;
   } catch (error) {
     console.error('Gemini Optimization Error:', error);
     // Deterministic fallback on AI errors
+    metrics.optimizer.errors++;
+    metrics.optimizer.fallback++;
+    metrics.optimizer.lastError = String(error);
     const fallback = deterministicOptimize(prompt, focus, intensity);
     res.json(fallback);
   }

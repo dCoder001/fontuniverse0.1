@@ -27,6 +27,7 @@ export const FontGenerator: React.FC = () => {
   const FONTS_PER_PAGE = 20;
   
   const previewRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
 
   const filteredFonts = GOOGLE_FONTS.filter(font => {
     const matchesSearch = font.family.toLowerCase().includes(searchTerm.toLowerCase());
@@ -107,35 +108,86 @@ export const FontGenerator: React.FC = () => {
     }
   };
 
-  const handleCopy = async () => {
-    if (!previewRef.current) return;
+  const getCopyStyles = () => {
+    const el = textRef.current;
+    const cs = el ? window.getComputedStyle(el) : undefined;
+    const family = selectedFont.family;
+    const weight = cs?.fontWeight || 'normal';
+    const style = cs?.fontStyle || 'normal';
+    const sizePx = cs?.fontSize || `${fontSize}px`;
+    const colorCss = cs?.color || textColor;
+    const decoration = cs?.textDecoration || 'none';
+    return { family, weight, style, sizePx, colorCss, decoration };
+  };
 
+  const escapeRtf = (s: string) =>
+    s.replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}').replace(/\n/g, '\\par ');
+
+  const buildClipboardPayload = (text: string) => {
+    const { family, weight, style, sizePx, colorCss, decoration } = getCopyStyles();
+    const sizeNumPx = Number(String(sizePx).replace('px', '')) || fontSize;
+    const sizePt = Math.round(sizeNumPx * 0.75); // px → pt approx
+    const rtfSizeHalfPoints = sizePt * 2;
+    const boldOn = ['bold', '700', '800', '900'].includes(String(weight));
+    const italicOn = String(style) === 'italic';
+    const underlineOn = String(decoration).includes('underline');
+
+    const html =
+      `<span style="font-family:'${family}', sans-serif; font-weight:${weight}; font-style:${style}; font-size:${sizeNumPx}px; color:${colorCss}; text-decoration:${decoration};">${text}</span>`;
+
+    const rtf =
+      `{\\rtf1\\ansi{\\fonttbl{\\f0 ${family};}}` +
+      `\\f0\\fs${rtfSizeHalfPoints}` +
+      `${boldOn ? '\\b' : ''}${italicOn ? '\\i' : ''}${underlineOn ? '\\ul' : ''} ` +
+      `${escapeRtf(text)} ` +
+      `${underlineOn ? '\\ul0 ' : ''}${italicOn ? '\\i0 ' : ''}${boldOn ? '\\b0 ' : ''}}`;
+
+    return { html, rtf };
+  };
+
+  const handleCopy = async () => {
+    const textToCopy = generatedText || inputText;
     try {
-      const textToCopy = generatedText || inputText;
-      
-      // Try to copy rich HTML to clipboard
-      const blob = new Blob([
-        `<span style="font-family: '${selectedFont.family}', sans-serif; font-size: ${fontSize}px; color: ${textColor};">${textToCopy}</span>`
-      ], { type: 'text/html' });
-      
-      const textBlob = new Blob([textToCopy], { type: 'text/plain' });
-      
-      const data = [new ClipboardItem({ 
-        'text/html': blob,
-        'text/plain': textBlob 
-      })];
-      
-      await navigator.clipboard.write(data);
-      
+      const { html, rtf } = buildClipboardPayload(textToCopy);
+      const items: Record<string, Blob> = {
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([textToCopy], { type: 'text/plain' }),
+      };
+      try {
+        items['text/rtf'] = new Blob([rtf], { type: 'text/rtf' });
+      } catch {}
+      // Primary modern API
+      await navigator.clipboard.write([new ClipboardItem(items)]);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
     } catch (err) {
-      console.error('Failed to copy: ', err);
-      // Fallback for simple text copy
-      navigator.clipboard.writeText(generatedText || inputText).then(() => {
+      console.error('ClipboardItem failed, falling back:', err);
+      // Fallback using execCommand for older browsers
+      try {
+        const { html } = buildClipboardPayload(textToCopy);
+        const tmp = document.createElement('div');
+        tmp.contentEditable = 'true';
+        tmp.style.position = 'fixed';
+        tmp.style.opacity = '0';
+        tmp.innerHTML = html;
+        document.body.appendChild(tmp);
+        const range = document.createRange();
+        range.selectNodeContents(tmp);
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+        document.execCommand('copy');
+        document.body.removeChild(tmp);
+        sel?.removeAllRanges();
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
-      });
+      } catch (fallbackErr) {
+        console.error('execCommand fallback failed:', fallbackErr);
+        // Final fallback to plain text
+        await navigator.clipboard.writeText(textToCopy);
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      }
     }
   };
 
@@ -300,6 +352,7 @@ export const FontGenerator: React.FC = () => {
             </style>
             
             <div 
+              ref={textRef}
               style={{ 
                 fontFamily: selectedFont.family,
                 fontSize: `${Math.max(16, fontSize)}px`, // Ensure minimum legible size on mobile for review if needed, though user control overrides
@@ -308,6 +361,23 @@ export const FontGenerator: React.FC = () => {
                 lineHeight: 1.2,
                 textShadow: '0 0 20px rgba(255,255,255,0.1)'
               }}
+              onCopy={(e) => {
+                try {
+                  const text = generatedText || inputText;
+                  const { html, rtf } = buildClipboardPayload(text);
+                  e.preventDefault();
+                  e.clipboardData?.setData('text/html', html);
+                  e.clipboardData?.setData('text/plain', text);
+                  try { e.clipboardData?.setData('text/rtf', rtf); } catch {}
+                  setShowToast(true);
+                  setTimeout(() => setShowToast(false), 3000);
+                } catch (err) {
+                  console.error('onCopy handler failed:', err);
+                }
+              }}
+              data-font-family={selectedFont.family}
+              data-font-size={fontSize}
+              data-color={textColor}
               className="break-words max-w-full"
             >
               {generatedText || inputText}
