@@ -2,39 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Type, RefreshCw, Sparkles, Download, Copy, Check, ChevronDown } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { GOOGLE_FONTS } from '../data/fonts';
+import { ColorSelector } from './ColorSelector';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface Font {
   family: string;
   category: string;
 }
-
-const PREDEFINED_COLORS = [
-  // Primary
-  { name: 'White', value: '#ffffff' },
-  { name: 'Black', value: '#000000' },
-  { name: 'Red', value: '#ef4444' },
-  { name: 'Blue', value: '#3b82f6' },
-  { name: 'Yellow', value: '#eab308' },
-  // Secondary
-  { name: 'Orange', value: '#f97316' },
-  { name: 'Green', value: '#22c55e' },
-  { name: 'Purple', value: '#a855f7' },
-  // Neutral
-  { name: 'Gray', value: '#6b7280' },
-  { name: 'Slate', value: '#64748b' },
-  { name: 'Zinc', value: '#71717a' },
-  // Others
-  { name: 'Teal', value: '#14b8a6' },
-  { name: 'Cyan', value: '#06b6d4' },
-  { name: 'Sky', value: '#0ea5e9' },
-  { name: 'Indigo', value: '#6366f1' },
-  { name: 'Violet', value: '#8b5cf6' },
-  { name: 'Fuchsia', value: '#d946ef' },
-  { name: 'Pink', value: '#ec4899' },
-  { name: 'Rose', value: '#f43f5e' },
-  { name: 'Amber', value: '#f59e0b' },
-];
 
 export const FontGenerator: React.FC = () => {
   const [inputText, setInputText] = useState('Font Universe');
@@ -48,26 +22,11 @@ export const FontGenerator: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
   
   const FONTS_PER_PAGE = 20;
   
   const previewRef = useRef<HTMLDivElement>(null);
-  const colorDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (colorDropdownRef.current && !colorDropdownRef.current.contains(event.target as Node)) {
-        setIsColorDropdownOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   const filteredFonts = GOOGLE_FONTS.filter(font => {
     const matchesSearch = font.family.toLowerCase().includes(searchTerm.toLowerCase());
@@ -302,48 +261,9 @@ export const FontGenerator: React.FC = () => {
               />
             </div>
 
-            <div className="space-y-2" ref={colorDropdownRef}>
+            <div className="space-y-2">
               <label className="text-sm text-gray-400">Color</label>
-              <div className="relative">
-                <button
-                  onClick={() => setIsColorDropdownOpen(!isColorDropdownOpen)}
-                  className="w-full bg-galaxy-900/50 border border-galaxy-700 rounded-lg p-3 text-white text-base flex items-center justify-between min-h-[48px] focus:outline-none focus:border-primary"
-                  aria-label="Select color"
-                  aria-haspopup="listbox"
-                  aria-expanded={isColorDropdownOpen}
-                >
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="w-6 h-6 rounded-full border border-white/20" 
-                      style={{ backgroundColor: textColor }}
-                    />
-                    <span>{PREDEFINED_COLORS.find(c => c.value === textColor)?.name || textColor}</span>
-                  </div>
-                  <ChevronDown size={20} className={`text-gray-400 transition-transform ${isColorDropdownOpen ? 'rotate-180' : ''}`} />
-                </button>
-                
-                {isColorDropdownOpen && (
-                  <div className="absolute z-10 w-full mt-2 bg-galaxy-900 border border-galaxy-700 rounded-lg shadow-xl max-h-60 overflow-y-auto p-2 grid grid-cols-4 gap-2">
-                    {PREDEFINED_COLORS.map((color) => (
-                      <button
-                        key={color.value}
-                        onClick={() => {
-                          setTextColor(color.value);
-                          setIsColorDropdownOpen(false);
-                        }}
-                        className="flex flex-col items-center gap-1 p-2 rounded hover:bg-white/10 transition-colors"
-                        title={color.name}
-                        aria-label={`Select ${color.name}`}
-                      >
-                        <div 
-                          className="w-8 h-8 rounded-full border border-white/20 shadow-sm" 
-                          style={{ backgroundColor: color.value }}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <ColorSelector selectedColor={textColor} onColorSelect={setTextColor} />
             </div>
           </div>
         </div>

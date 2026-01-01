@@ -8,5 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["dist", "node_modules", "check-models.ts", "test-api.ts", "**/*.test.ts"]
 }
