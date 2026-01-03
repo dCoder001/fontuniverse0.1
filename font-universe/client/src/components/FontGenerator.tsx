@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Type, RefreshCw, Sparkles, Download, Copy, Check, ChevronDown } from 'lucide-react';
+import { Type, RefreshCw, Sparkles, Download, Copy, Check, ChevronDown, Share2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { GOOGLE_FONTS } from '../data/fonts';
+import { convertToUnicode, UnicodeStyle } from '../utils/unicodeFontConverter';
 import { ColorSelector } from './ColorSelector';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -9,6 +10,14 @@ interface Font {
   family: string;
   category: string;
 }
+
+const UNICODE_STYLE_MAP: Record<string, UnicodeStyle | string> = {
+  'Fraktur (Unicode)': 'fraktur',
+  'Bold Script (Unicode)': 'bold_script',
+  'Double Struck (Unicode)': 'double_struck',
+  'Monospace (Unicode)': 'monospace',
+  'Small Caps (Unicode)': 'smallCaps', // Will return plain text with current converter unless extended
+};
 
 export const FontGenerator: React.FC = () => {
   const [inputText, setInputText] = useState('Font Universe');
@@ -147,6 +156,38 @@ export const FontGenerator: React.FC = () => {
 
   const handleCopy = async () => {
     const textToCopy = generatedText || inputText;
+
+    if (selectedFont.category === 'social') {
+      const convertedText = convertToUnicode(textToCopy, UNICODE_STYLE_MAP[selectedFont.family]);
+      try {
+        await navigator.clipboard.writeText(convertedText);
+        setIsCopied(true);
+        setShowToast(true);
+        setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
+      } catch (err) {
+        console.error('Unicode copy failed:', err);
+        // Fallback for Unicode copy
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = convertToUnicode(textToCopy, UNICODE_STYLE_MAP[selectedFont.family]);
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          setIsCopied(true);
+          setShowToast(true);
+          setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
+        } catch (fallbackErr) {
+          console.error('Unicode fallback copy failed:', fallbackErr);
+          alert('Failed to copy to clipboard');
+        }
+      }
+      return;
+    }
+
     try {
       const { html, rtf } = buildClipboardPayload(textToCopy);
       const items: Record<string, Blob> = {
@@ -158,8 +199,9 @@ export const FontGenerator: React.FC = () => {
       } catch {}
       // Primary modern API
       await navigator.clipboard.write([new ClipboardItem(items)]);
+      setIsCopied(true);
       setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
+      setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
     } catch (err) {
       console.error('ClipboardItem failed, falling back:', err);
       // Fallback using execCommand for older browsers
@@ -179,14 +221,16 @@ export const FontGenerator: React.FC = () => {
         document.execCommand('copy');
         document.body.removeChild(tmp);
         sel?.removeAllRanges();
+        setIsCopied(true);
         setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+        setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
       } catch (fallbackErr) {
         console.error('execCommand fallback failed:', fallbackErr);
         // Final fallback to plain text
         await navigator.clipboard.writeText(textToCopy);
+        setIsCopied(true);
         setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+        setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
       }
     }
   };
@@ -250,12 +294,13 @@ export const FontGenerator: React.FC = () => {
                 className="w-full bg-galaxy-900/50 border border-galaxy-700 rounded-lg p-3 text-white text-base mb-2 focus:outline-none focus:border-primary min-h-[48px]"
               />
               <div className="flex gap-2 mb-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-galaxy-700 touch-pan-x">
-                {['all', 'serif', 'sans-serif', 'script', 'display'].map(cat => (
+                {['all', 'serif', 'sans-serif', 'script', 'display', 'social'].map(cat => (
                   <button
                     key={cat}
                     onClick={() => setCategoryFilter(cat)}
                     className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-colors min-h-[40px] ${categoryFilter === cat ? 'bg-primary text-white' : 'bg-galaxy-900 text-gray-400 hover:text-white'}`}
                   >
+                    {cat === 'social' && <Share2 size={14} className="inline mr-1" />}
                     {cat.charAt(0).toUpperCase() + cat.slice(1)}
                   </button>
                 ))}
@@ -346,41 +391,39 @@ export const FontGenerator: React.FC = () => {
           </div>
           
           <div ref={previewRef} className="flex-1 bg-galaxy-900/50 rounded-xl border border-galaxy-700 overflow-hidden relative flex items-center justify-center p-4 md:p-8 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] min-h-[300px]">
-            {/* Load Google Font dynamically */}
-            <style>
-              {`@import url('https://fonts.googleapis.com/css2?family=${selectedFont.family.replace(/ /g, '+')}&display=swap');`}
-            </style>
+            {/* Load Google Font dynamically only if not social */}
+            {selectedFont.category !== 'social' && (
+              <style>
+                {`@import url('https://fonts.googleapis.com/css2?family=${selectedFont.family.replace(/ /g, '+')}&display=swap');`}
+              </style>
+            )}
             
             <div 
               ref={textRef}
               style={{ 
-                fontFamily: selectedFont.family,
-                fontSize: `${Math.max(16, fontSize)}px`, // Ensure minimum legible size on mobile for review if needed, though user control overrides
+                fontFamily: selectedFont.category === 'social' ? 'sans-serif' : selectedFont.family,
+                fontSize: `${Math.max(16, fontSize)}px`, 
                 color: textColor,
                 textAlign: 'center',
                 lineHeight: 1.2,
                 textShadow: '0 0 20px rgba(255,255,255,0.1)'
               }}
               onCopy={(e) => {
-                try {
-                  const text = generatedText || inputText;
-                  const { html, rtf } = buildClipboardPayload(text);
-                  e.preventDefault();
-                  e.clipboardData?.setData('text/html', html);
-                  e.clipboardData?.setData('text/plain', text);
-                  try { e.clipboardData?.setData('text/rtf', rtf); } catch {}
-                  setShowToast(true);
-                  setTimeout(() => setShowToast(false), 3000);
-                } catch (err) {
-                  console.error('onCopy handler failed:', err);
-                }
+                // Let standard copy event handle the selection, which will include the unicode characters
+                // if they are rendered in the DOM. 
+                // We show toast manually.
+                setShowToast(true);
+                setTimeout(() => setShowToast(false), 2000);
               }}
               data-font-family={selectedFont.family}
               data-font-size={fontSize}
               data-color={textColor}
               className="break-words max-w-full"
             >
-              {generatedText || inputText}
+              {selectedFont.category === 'social' 
+                ? convertToUnicode(generatedText || inputText, UNICODE_STYLE_MAP[selectedFont.family])
+                : (generatedText || inputText)
+              }
             </div>
           </div>
           
