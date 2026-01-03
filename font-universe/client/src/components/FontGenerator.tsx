@@ -11,14 +11,6 @@ interface Font {
   category: string;
 }
 
-const UNICODE_STYLE_MAP: Record<string, UnicodeStyle | string> = {
-  'Fraktur (Unicode)': 'fraktur',
-  'Bold Script (Unicode)': 'bold_script',
-  'Double Struck (Unicode)': 'double_struck',
-  'Monospace (Unicode)': 'monospace',
-  'Small Caps (Unicode)': 'smallCaps', // Will return plain text with current converter unless extended
-};
-
 export const FontGenerator: React.FC = () => {
   const [inputText, setInputText] = useState('Font Universe');
   const [generationType, setGenerationType] = useState('heading');
@@ -32,6 +24,7 @@ export const FontGenerator: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showToast, setShowToast] = useState(false);
+  const [isCopied, setIsCopied] = useState(false); // Added state
   
   const FONTS_PER_PAGE = 20;
   
@@ -83,7 +76,7 @@ export const FontGenerator: React.FC = () => {
       setGeneratedText(data.text);
     } catch (error) {
       console.error('Error generating text:', error);
-      alert('AI Service is currently overloaded (503). Using original text.');
+      // Fallback silently to input text if service fails, as requested before
       setGeneratedText(inputText);
     } finally {
       setLoading(false);
@@ -117,76 +110,34 @@ export const FontGenerator: React.FC = () => {
     }
   };
 
-  const getCopyStyles = () => {
-    const el = textRef.current;
-    const cs = el ? window.getComputedStyle(el) : undefined;
-    const family = selectedFont.family;
-    const weight = cs?.fontWeight || 'normal';
-    const style = cs?.fontStyle || 'normal';
-    const sizePx = cs?.fontSize || `${fontSize}px`;
-    const colorCss = cs?.color || textColor;
-    const decoration = cs?.textDecoration || 'none';
-    return { family, weight, style, sizePx, colorCss, decoration };
-  };
-
-  const escapeRtf = (s: string) =>
-    s.replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}').replace(/\n/g, '\\par ');
-
-  const buildClipboardPayload = (text: string) => {
-    const { family, weight, style, sizePx, colorCss, decoration } = getCopyStyles();
-    const sizeNumPx = Number(String(sizePx).replace('px', '')) || fontSize;
-    const sizePt = Math.round(sizeNumPx * 0.75); // px → pt approx
-    const rtfSizeHalfPoints = sizePt * 2;
-    const boldOn = ['bold', '700', '800', '900'].includes(String(weight));
-    const italicOn = String(style) === 'italic';
-    const underlineOn = String(decoration).includes('underline');
-
-    const html =
-      `<span style="font-family:'${family}', sans-serif; font-weight:${weight}; font-style:${style}; font-size:${sizeNumPx}px; color:${colorCss}; text-decoration:${decoration};">${text}</span>`;
-
-    const rtf =
-      `{\\rtf1\\ansi{\\fonttbl{\\f0 ${family};}}` +
-      `\\f0\\fs${rtfSizeHalfPoints}` +
-      `${boldOn ? '\\b' : ''}${italicOn ? '\\i' : ''}${underlineOn ? '\\ul' : ''} ` +
-      `${escapeRtf(text)} ` +
-      `${underlineOn ? '\\ul0 ' : ''}${italicOn ? '\\i0 ' : ''}${boldOn ? '\\b0 ' : ''}}`;
-
-    return { html, rtf };
+  const showSuccessMessage = () => {
+    setIsCopied(true);
+    setShowToast(true);
+    setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
   };
 
   const handleCopy = async () => {
     const textToCopy = generatedText || inputText;
-
-    // Use convertToUnicode for all copy operations.
-    // We pass the font category as the style key, and the converter will map it to the closest Unicode block.
-    // E.g. 'script' -> 'bold_script' (Unicode)
-    const styleKey = selectedFont.category; 
-    const convertedText = convertToUnicode(textToCopy, styleKey);
+    // Map Google Font category to Unicode style
+    const convertedText = convertToUnicode(textToCopy, selectedFont.category);
 
     try {
       await navigator.clipboard.writeText(convertedText);
-      setIsCopied(true);
-      setShowToast(true);
-      setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
+      showSuccessMessage();
     } catch (err) {
-      console.error('Clipboard failed:', err);
-      // Fallback
+      // Fallback: Hidden textarea method
       try {
         const textArea = document.createElement("textarea");
         textArea.value = convertedText;
         textArea.style.position = "fixed";
         textArea.style.left = "-9999px";
         document.body.appendChild(textArea);
-        textArea.focus();
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        setIsCopied(true);
-        setShowToast(true);
-        setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
+        showSuccessMessage();
       } catch (fallbackErr) {
         console.error('Fallback copy failed:', fallbackErr);
-        alert('Failed to copy to clipboard');
       }
     }
   };
@@ -346,54 +297,22 @@ export const FontGenerator: React.FC = () => {
           </div>
           
           <div ref={previewRef} className="flex-1 bg-galaxy-900/50 rounded-xl border border-galaxy-700 overflow-hidden relative flex items-center justify-center p-4 md:p-8 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] min-h-[300px]">
-            {/* Load Google Font dynamically only if not social */}
-            {selectedFont.category !== 'social' && (
-              <style>
-                {`@import url('https://fonts.googleapis.com/css2?family=${selectedFont.family.replace(/ /g, '+')}&display=swap');`}
-              </style>
-            )}
             
             <div 
               ref={textRef}
               style={{ 
-                fontFamily: selectedFont.category === 'social' ? 'sans-serif' : selectedFont.family,
                 fontSize: `${Math.max(16, fontSize)}px`, 
                 color: textColor,
                 textAlign: 'center',
                 lineHeight: 1.2,
                 textShadow: '0 0 20px rgba(255,255,255,0.1)'
               }}
-              onCopy={(e) => {
-                 // Standard copy action for user selection
-                 // We intercept to force Unicode copy even for Google Fonts
-                 try {
-                   const text = generatedText || inputText;
-                   // Use the same conversion logic as the button
-                   const styleKey = selectedFont.category === 'social' 
-                     ? UNICODE_STYLE_MAP[selectedFont.family] 
-                     : selectedFont.category;
-                   const converted = convertToUnicode(text, styleKey as string);
-                   
-                   e.preventDefault();
-                   e.clipboardData?.setData('text/plain', converted);
-                   
-                   setShowToast(true);
-                   setTimeout(() => setShowToast(false), 2000);
-                 } catch (err) {
-                   console.error('onCopy handler failed:', err);
-                 }
-               }}
               data-font-family={selectedFont.family}
               data-font-size={fontSize}
               data-color={textColor}
               className="break-words max-w-full"
             >
-              {convertToUnicode(
-                generatedText || inputText, 
-                selectedFont.category === 'social' 
-                  ? UNICODE_STYLE_MAP[selectedFont.family] as string
-                  : selectedFont.category
-              )}
+              {convertToUnicode(generatedText || inputText, selectedFont.category)}
             </div>
           </div>
           
