@@ -3,6 +3,21 @@
 export type UnicodeStyle = 'fraktur' | 'bold_script' | 'double_struck' | 'monospace';
 
 export const convertToUnicode = (text: string, style: UnicodeStyle | string): string => {
+    // Style Switcher Logic: Map Google Font categories to Unicode blocks
+    let targetStyle = style;
+    const categoryMap: Record<string, string> = {
+        'script': 'bold_script',
+        'serif': 'fraktur',
+        'sans-serif': 'double_struck',
+        'display': 'double_struck',
+        'monospace': 'monospace'
+    };
+    
+    // If the style matches a category, use the mapped Unicode style
+    if (categoryMap[style.toLowerCase()]) {
+        targetStyle = categoryMap[style.toLowerCase()];
+    }
+
     const maps: Record<string, { upper: number; lower: number }> = {
         fraktur: { upper: 0x1D504, lower: 0x1D51E }, // 𝕯𝖊𝖊𝖕𝕾𝖊𝖊𝖐
         bold_script: { upper: 0x1D4D0, lower: 0x1D4EA }, // 𝓓𝓮𝓮𝓹𝓢𝓮𝓮𝓴
@@ -10,7 +25,7 @@ export const convertToUnicode = (text: string, style: UnicodeStyle | string): st
         monospace: { upper: 0x1D670, lower: 0x1D68A } // 𝙳𝚎𝚎𝚙𝚂𝚎𝚎𝚔
     };
 
-    const map = maps[style];
+    const map = maps[targetStyle];
     if (!map) return text;
 
     return text.split('').map(char => {

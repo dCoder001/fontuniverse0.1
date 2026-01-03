@@ -157,80 +157,36 @@ export const FontGenerator: React.FC = () => {
   const handleCopy = async () => {
     const textToCopy = generatedText || inputText;
 
-    if (selectedFont.category === 'social') {
-      const convertedText = convertToUnicode(textToCopy, UNICODE_STYLE_MAP[selectedFont.family]);
-      try {
-        await navigator.clipboard.writeText(convertedText);
-        setIsCopied(true);
-        setShowToast(true);
-        setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
-      } catch (err) {
-        console.error('Unicode copy failed:', err);
-        // Fallback for Unicode copy
-        try {
-          const textArea = document.createElement("textarea");
-          textArea.value = convertToUnicode(textToCopy, UNICODE_STYLE_MAP[selectedFont.family]);
-          textArea.style.position = "fixed";
-          textArea.style.left = "-9999px";
-          document.body.appendChild(textArea);
-          textArea.focus();
-          textArea.select();
-          document.execCommand('copy');
-          document.body.removeChild(textArea);
-          setIsCopied(true);
-          setShowToast(true);
-          setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
-        } catch (fallbackErr) {
-          console.error('Unicode fallback copy failed:', fallbackErr);
-          alert('Failed to copy to clipboard');
-        }
-      }
-      return;
-    }
+    // Use convertToUnicode for all copy operations.
+    // We pass the font category as the style key, and the converter will map it to the closest Unicode block.
+    // E.g. 'script' -> 'bold_script' (Unicode)
+    const styleKey = selectedFont.category; 
+    const convertedText = convertToUnicode(textToCopy, styleKey);
 
     try {
-      const { html, rtf } = buildClipboardPayload(textToCopy);
-      const items: Record<string, Blob> = {
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'text/plain': new Blob([textToCopy], { type: 'text/plain' }),
-      };
-      try {
-        items['text/rtf'] = new Blob([rtf], { type: 'text/rtf' });
-      } catch {}
-      // Primary modern API
-      await navigator.clipboard.write([new ClipboardItem(items)]);
+      await navigator.clipboard.writeText(convertedText);
       setIsCopied(true);
       setShowToast(true);
       setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
     } catch (err) {
-      console.error('ClipboardItem failed, falling back:', err);
-      // Fallback using execCommand for older browsers
+      console.error('Clipboard failed:', err);
+      // Fallback
       try {
-        const { html } = buildClipboardPayload(textToCopy);
-        const tmp = document.createElement('div');
-        tmp.contentEditable = 'true';
-        tmp.style.position = 'fixed';
-        tmp.style.opacity = '0';
-        tmp.innerHTML = html;
-        document.body.appendChild(tmp);
-        const range = document.createRange();
-        range.selectNodeContents(tmp);
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
+        const textArea = document.createElement("textarea");
+        textArea.value = convertedText;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
         document.execCommand('copy');
-        document.body.removeChild(tmp);
-        sel?.removeAllRanges();
+        document.body.removeChild(textArea);
         setIsCopied(true);
         setShowToast(true);
         setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
       } catch (fallbackErr) {
-        console.error('execCommand fallback failed:', fallbackErr);
-        // Final fallback to plain text
-        await navigator.clipboard.writeText(textToCopy);
-        setIsCopied(true);
-        setShowToast(true);
-        setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
+        console.error('Fallback copy failed:', fallbackErr);
+        alert('Failed to copy to clipboard');
       }
     }
   };
@@ -294,13 +250,12 @@ export const FontGenerator: React.FC = () => {
                 className="w-full bg-galaxy-900/50 border border-galaxy-700 rounded-lg p-3 text-white text-base mb-2 focus:outline-none focus:border-primary min-h-[48px]"
               />
               <div className="flex gap-2 mb-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-galaxy-700 touch-pan-x">
-                {['all', 'serif', 'sans-serif', 'script', 'display', 'social'].map(cat => (
+                {['all', 'serif', 'sans-serif', 'script', 'display'].map(cat => (
                   <button
                     key={cat}
                     onClick={() => setCategoryFilter(cat)}
                     className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-colors min-h-[40px] ${categoryFilter === cat ? 'bg-primary text-white' : 'bg-galaxy-900 text-gray-400 hover:text-white'}`}
                   >
-                    {cat === 'social' && <Share2 size={14} className="inline mr-1" />}
                     {cat.charAt(0).toUpperCase() + cat.slice(1)}
                   </button>
                 ))}
