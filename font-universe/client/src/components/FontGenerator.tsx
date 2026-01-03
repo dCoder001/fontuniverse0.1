@@ -116,10 +116,19 @@ export const FontGenerator: React.FC = () => {
     setTimeout(() => { setShowToast(false); setIsCopied(false); }, 2000);
   };
 
+  const getUnicodeStyle = (font: Font) => {
+    // Force monospace/typewriter style for monospaced fonts
+    if (font.family.toLowerCase().includes('mono') || font.family.toLowerCase().includes('code')) {
+      return 'monospace';
+    }
+    return font.category;
+  };
+
   const handleCopy = async () => {
     const textToCopy = generatedText || inputText;
-    // Map Google Font category to Unicode style
-    const convertedText = convertToUnicode(textToCopy, selectedFont.category);
+    // Map Google Font category (or family traits) to Unicode style
+    const styleKey = getUnicodeStyle(selectedFont);
+    const convertedText = convertToUnicode(textToCopy, styleKey);
 
     try {
       await navigator.clipboard.writeText(convertedText);
@@ -312,7 +321,7 @@ export const FontGenerator: React.FC = () => {
               data-color={textColor}
               className="break-words max-w-full"
             >
-              {convertToUnicode(generatedText || inputText, selectedFont.category)}
+              {convertToUnicode(generatedText || inputText, selectedFont)}
             </div>
           </div>
           
