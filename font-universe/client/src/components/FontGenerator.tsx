@@ -364,21 +364,36 @@ export const FontGenerator: React.FC = () => {
                 textShadow: '0 0 20px rgba(255,255,255,0.1)'
               }}
               onCopy={(e) => {
-                // Let standard copy event handle the selection, which will include the unicode characters
-                // if they are rendered in the DOM. 
-                // We show toast manually.
-                setShowToast(true);
-                setTimeout(() => setShowToast(false), 2000);
-              }}
+                 // Standard copy action for user selection
+                 // We intercept to force Unicode copy even for Google Fonts
+                 try {
+                   const text = generatedText || inputText;
+                   // Use the same conversion logic as the button
+                   const styleKey = selectedFont.category === 'social' 
+                     ? UNICODE_STYLE_MAP[selectedFont.family] 
+                     : selectedFont.category;
+                   const converted = convertToUnicode(text, styleKey as string);
+                   
+                   e.preventDefault();
+                   e.clipboardData?.setData('text/plain', converted);
+                   
+                   setShowToast(true);
+                   setTimeout(() => setShowToast(false), 2000);
+                 } catch (err) {
+                   console.error('onCopy handler failed:', err);
+                 }
+               }}
               data-font-family={selectedFont.family}
               data-font-size={fontSize}
               data-color={textColor}
               className="break-words max-w-full"
             >
-              {selectedFont.category === 'social' 
-                ? convertToUnicode(generatedText || inputText, UNICODE_STYLE_MAP[selectedFont.family])
-                : (generatedText || inputText)
-              }
+              {convertToUnicode(
+                generatedText || inputText, 
+                selectedFont.category === 'social' 
+                  ? UNICODE_STYLE_MAP[selectedFont.family] as string
+                  : selectedFont.category
+              )}
             </div>
           </div>
           
